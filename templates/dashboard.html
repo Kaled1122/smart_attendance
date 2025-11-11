@@ -1,14 +1,47 @@
-<h2>Live Dashboard</h2>
-<table>
-  <tr><th>Name</th><th>Status</th><th>Time</th></tr>
-  {% for s in staff %}
-  <tr>
-    <td>{{ s.name }}</td>
-    <td style="color:
-        {% if s.status=='present' %}green{% elif s.status=='absent' %}red{% elif s.status=='on_way' %}orange{% else %}gray{% endif %}">
-        {{ s.status }}
-    </td>
-    <td>{{ s.timestamp or '' }}</td>
-  </tr>
-  {% endfor %}
-</table>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-white">
+<div class="container py-5">
+  <h1 class="text-center mb-4 fw-bold">Live Attendance Dashboard</h1>
+
+  <table class="table table-bordered table-hover text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in staff %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{{ s.role }}</td>
+        <td>
+          {% if s.status == 'present' %}
+            <span class="badge bg-success">Present</span>
+          {% elif s.status == 'unconfirmed' %}
+            <span class="badge bg-secondary">Unconfirmed</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">{{ s.status }}</span>
+          {% endif %}
+        </td>
+        <td>{{ s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="text-center">
+    <a href="/" class="btn btn-outline-primary">Back to Sign-In</a>
+  </div>
+</div>
+</body>
+</html>
