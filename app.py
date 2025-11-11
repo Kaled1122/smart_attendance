@@ -22,7 +22,18 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 
 db = SQLAlchemy(app)
-
+# Ensure all tables are created
+with app.app_context():
+    db.create_all()
+    # Optional: seed initial sample staff if table empty
+    if not Staff.query.first():
+        db.session.add_all([
+            Staff(name="Ahmed", phone="0501234567", role="staff"),
+            Staff(name="Fahad", phone="0509876543", role="senior"),
+            Staff(name="Contingency 1", phone="0505555555", role="contingency")
+        ])
+        db.session.commit()
+        print("✅ Staff table created and sample data added.")
 # -------------------------------------------------
 # DATABASE MODEL
 # -------------------------------------------------
