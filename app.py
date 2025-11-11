@@ -1,97 +1,89 @@
 import os
+import uuid
 from flask import Flask, render_template, request, redirect, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from utils.notifier import send_message
-from utils.scheduler import schedule_tasks
 
 # -------------------------------------------------
 # APP CONFIG
 # -------------------------------------------------
 app = Flask(__name__)
 
-# --- DATABASE CONFIG ---
 db_url = os.getenv("DATABASE_URL")
-
-# 🧠 Fix Railway's non-standard format (postgres:// → postgresql://)
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url or "sqlite:///data/attendance.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
-
 db = SQLAlchemy(app)
 
 # -------------------------------------------------
-# DATABASE MODEL
+# DATABASE MODELS
 # -------------------------------------------------
 class Staff(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(80), nullable=False)
     phone = db.Column(db.String(20))
     role = db.Column(db.String(20), default="staff")  # staff / senior / contingency
+    department = db.Column(db.String(80))
     status = db.Column(db.String(20), default="unconfirmed")
     timestamp = db.Column(db.DateTime)
 
     def __repr__(self):
-        return f"<Staff {self.name} - {self.status}>"
+        return f"<Staff {self.name} ({self.role}) - {self.status}>"
 
 # -------------------------------------------------
 # INITIALIZE DATABASE
 # -------------------------------------------------
 with app.app_context():
     db.create_all()
-    if not Staff.query.first():
-        db.session.add_all([
-            Staff(name="Ahmed", phone="0501234567", role="staff"),
-            Staff(name="Fahad", phone="0509876543", role="senior"),
-            Staff(name="Contingency 1", phone="0505555555", role="contingency")
-        ])
-        db.session.commit()
-        print("✅ Staff table created and sample data added.")
 
 # -------------------------------------------------
 # ROUTES
 # -------------------------------------------------
-@app.route('/')
-def index():
-    """Staff sign-in page."""
-    return render_template('index.html', staff=Staff.query.all())
+@app.route("/")
+def home():
+    return render_template("admin.html", staff=Staff.query.all())
 
-@app.route('/sign_in', methods=['POST'])
-def sign_in():
-    """Mark staff as present when they sign in."""
-    staff_id = request.form['id']
-    s = Staff.query.get(staff_id)
-    if not s:
-        return jsonify({'error': 'Staff not found'}), 404
-    s.status = "present"
-    s.timestamp = datetime.now()
+@app.route("/login/<uuid_code>")
+def login(uuid_code):
+    """Personalized login page per staff UUID"""
+    staff = Staff.query.filter_by(uuid=uuid_code).first()
+    if not staff:
+        return "Invalid or expired link", 404
+    return render_template("index.html", staff=staff)
+
+@app.route("/sign_in/<uuid_code>", methods=["POST"])
+def sign_in(uuid_code):
+    staff = Staff.query.filter_by(uuid=uuid_code).first()
+    if not staff:
+        return jsonify({"error": "Invalid ID"}), 404
+    staff.status = "present"
+    staff.timestamp = datetime.now()
     db.session.commit()
-    return redirect('/')
+    return render_template("index.html", staff=staff, message="✅ You are signed in successfully!")
 
-@app.route('/update_status', methods=['POST'])
-def update_status():
-    """Manually update a staff member’s status."""
-    s = Staff.query.get(request.form['id'])
-    if not s:
-        return jsonify({'error': 'Staff not found'}), 404
-    s.status = request.form['status']
-    db.session.commit()
-    return jsonify({'success': True})
-
-@app.route('/dashboard')
+@app.route("/dashboard")
 def dashboard():
-    """Dashboard for senior staff to view live attendance."""
-    staff = Staff.query.order_by(Staff.role).all()
-    return render_template('dashboard.html', staff=staff)
+    staff = Staff.query.order_by(Staff.role, Staff.name).all()
+    return render_template("dashboard.html", staff=staff)
+
+@app.route("/generate_links")
+def generate_links():
+    """Generate personal sign-in links for all staff"""
+    base_url = request.host_url.rstrip("/")
+    links = []
+    for s in Staff.query.all():
+        links.append({
+            "name": s.name,
+            "role": s.role,
+            "url": f"{base_url}/login/{s.uuid}"
+        })
+    return render_template("admin.html", staff=Staff.query.all(), links=links)
 
 # -------------------------------------------------
-# MAIN ENTRY
+# RUN APP
 # -------------------------------------------------
 if __name__ == "__main__":
-    # Schedule daily attendance automation (6:00–6:30 AM)
-    schedule_tasks(app, db, Staff)
-    # Start Flask app
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
