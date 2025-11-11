@@ -3,39 +3,44 @@ from datetime import datetime
 from utils.notifier import send_message
 
 def schedule_tasks(app, db, Staff):
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone="Asia/Riyadh")
 
-    # 6:00 — Reset all statuses
+    # 6:00 AM → Reset all statuses
     @scheduler.scheduled_job('cron', hour=6, minute=0)
     def reset_attendance():
         with app.app_context():
+            print("🔄 [6:00 AM] Resetting all staff statuses...")
             for s in Staff.query.all():
                 s.status = "unconfirmed"
             db.session.commit()
+            print("✅ All statuses set to unconfirmed.")
 
-    # 6:15 — Notify unconfirmed staff
+    # 6:15 AM → Notify unconfirmed staff
     @scheduler.scheduled_job('cron', hour=6, minute=15)
     def remind_unconfirmed():
         with app.app_context():
+            print("📱 [6:15 AM] Reminding unconfirmed staff...")
             for s in Staff.query.filter_by(status="unconfirmed").all():
-                send_message(s.phone, "You haven’t signed in. Reply: [On way] [Sick] [Absent]")
+                if s.phone:
+                    send_message(
+                        s.phone,
+                        f"Hi {s.name}, you haven’t signed in yet. Reply: [On way] [Sick] [Absent]"
+                    )
+            print("✅ Reminder sent to all unconfirmed staff.")
 
-    # 6:25 — Notify contingency staff
+    # 6:25 AM → Notify contingency staff if any absences expected
     @scheduler.scheduled_job('cron', hour=6, minute=25)
     def activate_contingency():
         with app.app_context():
-            missing = Staff.query.filter_by(status="unconfirmed").all()
-            if missing:
-                contingency = Staff.query.filter_by(role="contingency").all()
-                for c in contingency:
-                    send_message(c.phone, f"Prepare to cover for: {', '.join([m.name for m in missing])}")
-
-    # 6:30 — Lock attendance
-    @scheduler.scheduled_job('cron', hour=6, minute=30)
-    def lock_attendance():
-        with app.app_context():
-            for s in Staff.query.filter_by(status="unconfirmed").all():
-                s.status = "absent"
-            db.session.commit()
+            print("⚠️ [6:25 AM] Checking for absences...")
+            unconfirmed = Staff.query.filter_by(status="unconfirmed").count()
+            if unconfirmed > 0:
+                contingency_staff = Staff.query.filter_by(role="contingency").all()
+                for c in contingency_staff:
+                    send_message(c.phone, f"🚨 Contingency alert: {unconfirmed} staff unconfirmed.")
+                print(f"⚠️ Contingency staff notified ({unconfirmed} unconfirmed).")
+            else:
+                print("✅ No contingency needed.")
 
     scheduler.start()
+    print("🕒 Scheduler active — tasks set for 6:00, 6:15, and 6:25 AM.")
