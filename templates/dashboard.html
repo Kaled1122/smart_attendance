@@ -1,0 +1,14 @@
+<h2>Live Dashboard</h2>
+<table>
+  <tr><th>Name</th><th>Status</th><th>Time</th></tr>
+  {% for s in staff %}
+  <tr>
+    <td>{{ s.name }}</td>
+    <td style="color:
+        {% if s.status=='present' %}green{% elif s.status=='absent' %}red{% elif s.status=='on_way' %}orange{% else %}gray{% endif %}">
+        {{ s.status }}
+    </td>
+    <td>{{ s.timestamp or '' }}</td>
+  </tr>
+  {% endfor %}
+</table>

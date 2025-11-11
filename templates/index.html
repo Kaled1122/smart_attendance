@@ -1,0 +1,9 @@
+<h2>Sign In</h2>
+<form method="POST" action="/sign_in">
+  <select name="id">
+    {% for s in staff if s.role == "staff" %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">I’m Here</button>
+</form>
