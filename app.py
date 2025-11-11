@@ -44,3 +44,9 @@ def mark_attendance():
     db.session.add(att)
     db.session.commit()
     return jsonify({"message": "Marked present"})
+
+from utils.scheduler import schedule_tasks
+
+if __name__ == "__main__":
+    schedule_tasks(app, db, Staff)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
