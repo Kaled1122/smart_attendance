@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+import os
+from flask import Flask, render_template, request, redirect, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, create_access_token
 from datetime import datetime
+from utils.notifier import send_message
 from utils.scheduler import schedule_tasks
 
 app = Flask(__name__)
