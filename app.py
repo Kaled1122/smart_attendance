@@ -10,10 +10,16 @@ from utils.scheduler import schedule_tasks
 # -------------------------------------------------
 app = Flask(__name__)
 
-# Database connection (use Railway env variable)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {"pool_pre_ping": True}
+# --- DATABASE CONFIG ---
+db_url = os.getenv("DATABASE_URL")
+
+# 🧠 Fix Railway's non-standard format (postgres:// → postgresql://)
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url or "sqlite:///data/attendance.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 
 db = SQLAlchemy(app)
 
