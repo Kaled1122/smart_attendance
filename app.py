@@ -1,89 +1,46 @@
-import os
-import uuid
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager, create_access_token
 from datetime import datetime
+from tasks import trigger_late_check, trigger_absent_check
 
-# -------------------------------------------------
-# APP CONFIG
-# -------------------------------------------------
 app = Flask(__name__)
-
-db_url = os.getenv("DATABASE_URL")
-if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-app.config["SQLALCHEMY_DATABASE_URI"] = db_url or "sqlite:///data/attendance.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET")
 db = SQLAlchemy(app)
+jwt = JWTManager(app)
 
-# -------------------------------------------------
-# DATABASE MODELS
-# -------------------------------------------------
-class Staff(db.Model):
+class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    name = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(80))
+    role = db.Column(db.String(20))
+    department = db.Column(db.String(50))
     phone = db.Column(db.String(20))
-    role = db.Column(db.String(20), default="staff")  # staff / senior / contingency
-    department = db.Column(db.String(80))
-    status = db.Column(db.String(20), default="unconfirmed")
+    password_hash = db.Column(db.String(120))
+    uuid = db.Column(db.String(36), unique=True)
+
+class Attendance(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer)
+    date = db.Column(db.Date)
+    status = db.Column(db.String(20))
     timestamp = db.Column(db.DateTime)
 
-    def __repr__(self):
-        return f"<Staff {self.name} ({self.role}) - {self.status}>"
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(phone=data["phone"]).first()
+    if not user:
+        return jsonify({"error": "Invalid credentials"}), 401
+    token = create_access_token(identity=user.id)
+    return jsonify({"token": token, "role": user.role})
 
-# -------------------------------------------------
-# INITIALIZE DATABASE
-# -------------------------------------------------
-with app.app_context():
-    db.create_all()
-
-# -------------------------------------------------
-# ROUTES
-# -------------------------------------------------
-@app.route("/")
-def home():
-    return render_template("admin.html", staff=Staff.query.all())
-
-@app.route("/login/<uuid_code>")
-def login(uuid_code):
-    """Personalized login page per staff UUID"""
-    staff = Staff.query.filter_by(uuid=uuid_code).first()
-    if not staff:
-        return "Invalid or expired link", 404
-    return render_template("index.html", staff=staff)
-
-@app.route("/sign_in/<uuid_code>", methods=["POST"])
-def sign_in(uuid_code):
-    staff = Staff.query.filter_by(uuid=uuid_code).first()
-    if not staff:
-        return jsonify({"error": "Invalid ID"}), 404
-    staff.status = "present"
-    staff.timestamp = datetime.now()
+@app.route("/api/mark", methods=["POST"])
+@jwt_required()
+def mark_attendance():
+    user_id = get_jwt_identity()
+    att = Attendance(user_id=user_id, date=datetime.now().date(),
+                     status="present", timestamp=datetime.now())
+    db.session.add(att)
     db.session.commit()
-    return render_template("index.html", staff=staff, message="✅ You are signed in successfully!")
-
-@app.route("/dashboard")
-def dashboard():
-    staff = Staff.query.order_by(Staff.role, Staff.name).all()
-    return render_template("dashboard.html", staff=staff)
-
-@app.route("/generate_links")
-def generate_links():
-    """Generate personal sign-in links for all staff"""
-    base_url = request.host_url.rstrip("/")
-    links = []
-    for s in Staff.query.all():
-        links.append({
-            "name": s.name,
-            "role": s.role,
-            "url": f"{base_url}/login/{s.uuid}"
-        })
-    return render_template("admin.html", staff=Staff.query.all(), links=links)
-
-# -------------------------------------------------
-# RUN APP
-# -------------------------------------------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    return jsonify({"message": "Marked present"})
