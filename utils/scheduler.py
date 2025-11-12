@@ -37,10 +37,3 @@ def schedule_tasks(app, db, Staff):
             if unconfirmed > 0:
                 contingency_staff = Staff.query.filter_by(role="contingency").all()
                 for c in contingency_staff:
-                    send_message(c.phone, f"🚨 Contingency alert: {unconfirmed} staff unconfirmed.")
-                print(f"⚠️ Contingency staff notified ({unconfirmed} unconfirmed).")
-            else:
-                print("✅ No contingency needed.")
-
-    scheduler.start()
-    print("🕒 Scheduler active — tasks set for 6:00, 6:15, and 6:25 AM.")
