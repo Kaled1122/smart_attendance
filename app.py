@@ -106,6 +106,11 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
     token = create_access_token(identity=staff.name)
     return jsonify(access_token=token)
+    
+@app.route("/run_schedule")
+def run_schedule():
+    schedule_tasks(app, db, Staff)
+    return "Scheduler triggered", 200
 
 # -------------------------------------------------
 # MAIN ENTRY
